@@ -8,7 +8,7 @@ own repos and stay loosely coupled:
 |---|---|
 | **dgx-spark-core** (this repo) | HF collection mirror, shared tooling |
 | [dgx-spark-vllm](https://github.com/MvdB/dgx-spark-vllm) | Text/vision LLM serving (vLLM) + evaluation testplan |
-| dgx-spark-tts *(planned)* | TTS serving + evaluation (NeMo) |
+| [dgx-spark-tts](https://github.com/MvdB/dgx-spark-tts) | TTS serving + German-language evaluation (NeMo, Qwen3-TTS) |
 | dgx-spark-image *(planned)* | Text-to-image serving + evaluation (diffusers) |
 
 ## Components

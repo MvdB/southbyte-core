@@ -29,6 +29,13 @@ profiles) is isolated in its own repo too.
 
 ## Planned
 
+- **`southbyte-image`** — text-to-image serving + evaluation (diffusers), following
+  the same curated-profile + evaluation pattern as the vLLM and TTS stacks; its
+  GB10-tuned profiles will live in `southbyte-spark-profiles/image/`
 - Shared results schema for cross-modality evaluation reports
 - Report/dashboard library (extracted from `southbyte-vllm/testplan` once a second
   modality produces results)
+
+---
+
+Built by [southbyte](https://southbyte.de).

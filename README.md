@@ -12,7 +12,8 @@ profiles) is isolated in its own repo too.
 | [southbyte-vllm](https://github.com/MvdB/southbyte-vllm) | vLLM serving runner + LLM evaluation testplan |
 | [southbyte-tts](https://github.com/MvdB/southbyte-tts) | TTS/STT serving + German-language evaluation |
 | [southbyte-spark-profiles](https://github.com/MvdB/southbyte-spark-profiles) | DGX Spark (GB10) validated vLLM + vLLM-omni profiles, custom kernels, benchmarks |
-| southbyte-image *(planned)* | Text-to-image serving + evaluation (diffusers) |
+| [southbyte-image](https://github.com/MvdB/southbyte-image) | Text-to-image serving + evaluation (diffusers) |
+| [southbyte-results](https://github.com/MvdB/southbyte-results) | Cross-modality results website → [mvdb.github.io/southbyte-results](https://mvdb.github.io/southbyte-results/) |
 
 ## How the family fits together
 
@@ -32,9 +33,8 @@ profiles) is isolated in its own repo too.
 - **`southbyte-image`** — text-to-image serving + evaluation (diffusers), following
   the same curated-profile + evaluation pattern as the vLLM and TTS stacks; its
   GB10-tuned profiles will live in `southbyte-spark-profiles/image/`
-- Shared results schema for cross-modality evaluation reports
-- Report/dashboard library (extracted from `southbyte-vllm/testplan` once a second
-  modality produces results)
+- Shared results schema for cross-modality evaluation reports (the curated
+  aggregation already lives in [southbyte-results](https://github.com/MvdB/southbyte-results))
 
 ---
 

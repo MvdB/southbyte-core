@@ -23,7 +23,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, snapshot_download
-from huggingface_hub.utils import RepositoryNotFoundError, GatedRepoError
+from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
 
 # ---------------------------------------------------------------------------
 # Konfiguration
@@ -36,14 +36,26 @@ COLLECTION_NAME = os.environ.get("HF_COLLECTION", "LocalCache")  # überschreibb
 # IGNORE_PATTERNS = ["*.msgpack", "flax_model*", "tf_model*", "rust_model*"]
 IGNORE_PATTERNS: list[str] | None = None
 
+# Pro Modell nur bestimmte Dateien holen (nicht eingetragen = ganzes Repo).
+# Für Repos, die ein Dutzend Quantisierungs-Varianten derselben Gewichte
+# ausliefern: dort lädt man sonst hunderte GB für die drei Dateien, die man
+# tatsächlich braucht. Schlüssel ist die exakte model_id aus der Collection.
+ALLOW_PATTERNS: dict[str, list[str]] = {
+    # "Abiray/Minimax-H3-nvfp4-INT4-INT8-Convrot": [
+    #     "MiniMax_H3_FL2VA_pruned_nvfp4.safetensors",
+    #     "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    #     "vae/*",
+    # ],
+}
+
 # ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR = Path(__file__).parent
-ENV_FILE    = SCRIPT_DIR / ".env"
-STATE_FILE  = SCRIPT_DIR / ".sync_state.json"
-LOG_FILE    = SCRIPT_DIR / "hf_sync.log"
+ENV_FILE = SCRIPT_DIR / ".env"
+STATE_FILE = SCRIPT_DIR / ".sync_state.json"
+LOG_FILE = SCRIPT_DIR / "hf_sync.log"
 
 # .env früh laden, damit HF_COLLECTION bereits beim Modulstart verfügbar ist
 load_dotenv(ENV_FILE, override=True)
@@ -63,6 +75,7 @@ log = logging.getLogger(__name__)
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
 
+
 def load_token() -> str:
     """Liest HF_TOKEN aus .env-Datei."""
     if ENV_FILE.exists():
@@ -79,7 +92,8 @@ def load_state() -> dict:
     """Liest den lokalen Status (welcher SHA wurde zuletzt heruntergeladen)."""
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            data: dict = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            return data
         except json.JSONDecodeError:
             log.warning("Beschädigte State-Datei – wird zurückgesetzt.")
     return {}
@@ -92,6 +106,11 @@ def save_state(state: dict) -> None:
 def local_dir_for(model_id: str) -> Path:
     """'mistralai/Mistral-7B-v0.1' → './mistralai--Mistral-7B-v0.1'"""
     return SCRIPT_DIR / model_id.replace("/", "--")
+
+
+def allow_patterns_for(model_id: str) -> list[str] | None:
+    """Dateimuster für dieses Modell, None = ganzes Repo herunterladen."""
+    return ALLOW_PATTERNS.get(model_id) or None
 
 
 def find_collection(api: HfApi, username: str, token: str):
@@ -113,8 +132,7 @@ def find_collection(api: HfApi, username: str, token: str):
         matches = [c for c in collections if COLLECTION_NAME.lower() in c.title.strip().lower()]
         if matches:
             log.warning(
-                f"Kein exakter Treffer für '{COLLECTION_NAME}', "
-                f"verwende '{matches[0].title}'."
+                f"Kein exakter Treffer für '{COLLECTION_NAME}', verwende '{matches[0].title}'."
             )
             match = matches[0]
 
@@ -154,19 +172,32 @@ def sync_model(
     Lädt ein Modell herunter oder überspringt es wenn aktuell.
     Gibt zurück: 'skipped' | 'downloaded' | 'updated' | 'failed'
     """
-    local_dir   = local_dir_for(model_id)
-    stored      = state.get(model_id, {})
-    stored_sha  = stored.get("sha")
-    is_present  = local_dir.exists() and any(local_dir.iterdir())
+    local_dir = local_dir_for(model_id)
+    stored = state.get(model_id, {})
+    stored_sha = stored.get("sha")
+    allow = allow_patterns_for(model_id)
+    # Muster gehören zum Zustand: ändert man sie, passt der SHA weiterhin,
+    # das lokale Dateiset aber nicht mehr. Ohne diesen Vergleich bliebe die
+    # Änderung bis zum nächsten Remote-Commit wirkungslos.
+    patterns_changed = stored.get("allow") != allow
+    is_present = local_dir.exists() and any(local_dir.iterdir())
 
     # Aktuell prüfen
-    if is_present and stored_sha and remote_sha and stored_sha == remote_sha:
+    if (
+        is_present
+        and stored_sha
+        and remote_sha
+        and stored_sha == remote_sha
+        and not patterns_changed
+    ):
         log.info(f"[OK]       {model_id}  (sha {remote_sha[:8]}…)")
         return "skipped"
 
     # Status-Ausgabe
     if not is_present:
-        log.info(f"[DOWNLOAD] {model_id}")
+        log.info(f"[DOWNLOAD] {model_id}" + (f"  ({len(allow)} Muster)" if allow else ""))
+    elif patterns_changed:
+        log.info(f"[UPDATE]   {model_id}  (Dateimuster geändert)")
     else:
         old = stored_sha[:8] + "…" if stored_sha else "?"
         new = remote_sha[:8] + "…" if remote_sha else "?"
@@ -180,6 +211,8 @@ def sync_model(
             local_dir=str(local_dir),
             token=token,
         )
+        if allow:
+            kwargs["allow_patterns"] = allow
         if IGNORE_PATTERNS:
             kwargs["ignore_patterns"] = IGNORE_PATTERNS
 
@@ -199,7 +232,10 @@ def sync_model(
         log.error(f"[FAIL]     {model_id}  → {exc}")
         return "failed"
 
-    state[model_id] = {"sha": remote_sha, "local_dir": str(local_dir)}
+    entry: dict = {"sha": remote_sha, "local_dir": str(local_dir)}
+    if allow:  # nur schreiben wenn gesetzt, damit bestehende Einträge unverändert bleiben
+        entry["allow"] = allow
+    state[model_id] = entry
     save_state(state)
 
     was_update = is_present
@@ -210,19 +246,20 @@ def sync_model(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     log.info("=" * 60)
     log.info(f"HF LocalCache Sync  —  Collection: '{COLLECTION_NAME}'")
     log.info("=" * 60)
 
     token = load_token()
-    api   = HfApi()
+    api = HfApi()
     state = load_state()
 
     # Nutzer identifizieren
     try:
         user_info = api.whoami(token=token)
-        username  = user_info["name"]
+        username = user_info["name"]
     except Exception as exc:
         log.error(f"Authentifizierung fehlgeschlagen: {exc}")
         sys.exit(1)
@@ -236,7 +273,7 @@ def main() -> None:
     log.info(f"Collection '{collection.title}': {len(model_items)} Modelle")
     if skipped_types:
         log.info(
-            f"Übersprungen (kein Modell): "
+            "Übersprungen (kein Modell): "
             + ", ".join(f"{i.item_id} ({i.item_type})" for i in skipped_types)
         )
 
@@ -244,9 +281,9 @@ def main() -> None:
     counts = {"skipped": 0, "downloaded": 0, "updated": 0, "failed": 0}
 
     for item in model_items:
-        model_id   = item.item_id
+        model_id = item.item_id
         remote_sha = get_remote_sha(api, model_id, token)
-        result     = sync_model(model_id, token, remote_sha, state)
+        result = sync_model(model_id, token, remote_sha, state)
         counts[result] += 1
 
     # Zusammenfassung

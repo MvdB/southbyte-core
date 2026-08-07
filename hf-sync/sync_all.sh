@@ -1,7 +1,7 @@
 #!/bin/bash
 # sync_all.sh — HF→local sync, local→NFS push, then retention. Lockfile-guarded; phase-timed.
 # Config below is machine-specific; edit before reusing.
-# Hourly cron:  0 * * * * /home/mvdb/sync_all.sh
+# Hourly cron:  0 * * * * $HOME/dgx-spark/dgx-spark-core/hf-sync/sync_all.sh
 #
 # Direction note: hf_sync.py is run ON THIS MACHINE, so downloads land in $LOCAL.
 # $LOCAL is therefore authoritative and we PUSH to the NAS. The old NFS→local

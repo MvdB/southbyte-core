@@ -13,6 +13,7 @@ profiles) is isolated in its own repo too.
 | [southbyte-tts](https://github.com/MvdB/southbyte-tts) | TTS/STT serving + German-language evaluation |
 | [southbyte-spark-profiles](https://github.com/MvdB/southbyte-spark-profiles) | DGX Spark (GB10) validated vLLM + vLLM-omni profiles, custom kernels, benchmarks |
 | [southbyte-image](https://github.com/MvdB/southbyte-image) | Text-to-image serving + evaluation (diffusers) |
+| [southbyte-music](https://github.com/MvdB/southbyte-music) | Text-to-music serving (MiniMax-Music3 via SGLang-Omni) + web interface, Helm chart |
 | [southbyte-results](https://github.com/MvdB/southbyte-results) | Cross-modality results website → [mvdb.github.io/southbyte-results](https://mvdb.github.io/southbyte-results/) |
 
 ## How the family fits together
@@ -30,9 +31,9 @@ profiles) is isolated in its own repo too.
 
 ## Planned
 
-- **`southbyte-image`** — text-to-image serving + evaluation (diffusers), following
-  the same curated-profile + evaluation pattern as the vLLM and TTS stacks; its
-  GB10-tuned profiles will live in `southbyte-spark-profiles/image/`
+- An evaluation harness for `southbyte-music`. Every other stack measures its
+  models — WER for TTS, prompt fidelity for image, judge-scored playbooks for
+  LLMs. Music has no metric yet; what sounds good is decided by ear for now.
 - Shared results schema for cross-modality evaluation reports (the curated
   aggregation already lives in [southbyte-results](https://github.com/MvdB/southbyte-results))
 
